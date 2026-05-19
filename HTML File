@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>FinanceOS — Smart Money Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #05090F;
+    --bg2: #0A1020;
+    --card: #0D1526;
+    --card2: #111C30;
+    --border: rgba(255,255,255,0.07);
+    --accent: #4F8EF7;
+    --accent-dim: rgba(79,142,247,0.12);
+    --green: #2DD4A0;
+    --green-dim: rgba(45,212,160,0.10);
+    --red: #F4716A;
+    --red-dim: rgba(244,113,106,0.10);
+    --text: #EEF2FF;
+    --text2: #94A3B8;
+    --muted: #3D5070;
+    --font-head: 'Syne', sans-serif;
+    --font-body: 'Manrope', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  input, select, button, textarea { font-family: var(--font-body); }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  input::placeholder { color: var(--muted); }
+  select option { background: var(--card); color: var(--text); }
+  input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.4); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+  /* ── LAYOUT ── */
+  #app { max-width: 430px; margin: 0 auto; min-height: 100vh; position: relative; }
+
+  /* ── HEADER ── */
+  .header {
+    position: sticky; top: 0; z-index: 90;
+    background: rgba(5,9,15,0.95);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px 10px;
+  }
+  .header-row { display: flex; justify-content: space-between; align-items: center; }
+  .header-title { font-family: var(--font-head); font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -0.4px; }
+  .header-sub { font-size: 10px; color: var(--muted); margin-top: 1px; font-family: var(--font-mono); }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .header-badge { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
+  .header-badge span { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+  .icon-btn { width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .sync-indicator { width: 18px; height: 18px; color: var(--accent); animation: spin 1s linear infinite; display: none; }
+  .sync-indicator.active { display: block; }
+  .logo-btn { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg,#4F8EF7,#2DD4A0); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: var(--font-head); font-weight: 800; color: #fff; font-size: 14px; }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 430px; z-index: 200;
+    background: rgba(5,9,15,0.97); backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; padding: 8px 0 22px;
+  }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; padding: 4px 0; }
+  .nav-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; color: var(--muted); }
+  .nav-item.active .nav-icon { background: var(--accent-dim); color: var(--accent); }
+  .nav-label { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; transition: color 0.15s; }
+  .nav-item.active .nav-label { color: var(--accent); }
+
+  /* ── PAGE ── */
+  .page { padding: 12px 16px 110px; animation: fadeUp 0.25s ease; display: none; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .card { background: var(--card); border-radius: 16px; border: 1px solid var(--border); }
+  .card-p { padding: 16px; }
+
+  /* ── HERO P&L ── */
+  .hero-card {
+    background: linear-gradient(135deg,#070F1E,#0C1930);
+    border-radius: 20px; padding: 20px; margin-bottom: 14px;
+    border: 1px solid rgba(79,142,247,0.15);
+    position: relative; overflow: hidden;
+  }
+  .hero-card::before {
+    content:''; position:absolute; right:-30px; top:-30px;
+    width:130px; height:130px; border-radius:50%;
+    background: rgba(79,142,247,0.07);
+  }
+  .hero-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 4px; }
+  .hero-amount { font-family: var(--font-mono); font-size: 34px; font-weight: 600; letter-spacing: -1px; margin-bottom: 14px; }
+  .hero-row { display: flex; gap: 24px; }
+  .hero-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 2px; }
+  .hero-stat-val { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--text); }
+
+  /* ── 2-COL GRID ── */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { border-radius: 16px; padding: 14px; border: 1px solid; }
+  .stat-card-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin: 8px 0 2px; }
+  .stat-card-val { font-family: var(--font-mono); font-size: 20px; font-weight: 600; }
+
+  /* ── BAR CHART ── */
+  .chart-wrap { display: flex; align-items: flex-end; gap: 5px; height: 72px; }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .chart-bars { display: flex; gap: 2px; align-items: flex-end; height: 56px; }
+  .bar { width: 8px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.4s; }
+  .chart-label { font-size: 9px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── SECTION TITLE ── */
+  .section-title { font-family: var(--font-head); font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+  .group-label { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+
+  /* ── PROGRESS BAR ── */
+  .prog-track { height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; }
+  .prog-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#4F8EF7,#7B6EF7); transition: width 0.5s; }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { text-align: left; padding: 5px 4px; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--border); letter-spacing: 0.04em; }
+  .data-table th.r, .data-table td.r { text-align: right; }
+  .data-table td { padding: 8px 4px; font-family: var(--font-mono); }
+
+  /* ── TX LIST ── */
+  .tx-group-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .tx-list { border-radius: 14px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 16px; }
+  .tx-item { display: flex; align-items: center; padding: 12px 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .tx-item:last-child { border-bottom: none; }
+  .tx-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0; }
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-name { font-size: 14px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+  .tx-meta { font-size: 11px; color: var(--muted); }
+  .tx-amount { font-family: var(--font-mono); font-size: 15px; font-weight: 600; margin-bottom: 4px; text-align: right; }
+  .tx-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .tx-actions button { background: none; border: none; color: #3D5070; cursor: pointer; padding: 2px; }
+
+  /* ── FILTERS ── */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .filter-pill { padding: 6px 16px; border-radius: 99px; border: none; cursor: pointer; font-size: 12px; font-weight: 700; text-transform: capitalize; font-family: var(--font-body); transition: all 0.15s; background: rgba(255,255,255,0.05); color: var(--muted); }
+  .filter-pill.active-all { background: var(--accent); color: #fff; }
+  .filter-pill.active-income { background: var(--green); color: #0a1020; }
+  .filter-pill.active-expense { background: var(--red); color: #fff; }
+
+  /* ── SEARCH ── */
+  .search-wrap { position: relative; flex: 1; }
+  .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .search-wrap input { padding-left: 38px; }
+
+  /* ── INPUT / SELECT ── */
+  .inp {
+    width: 100%; padding: 11px 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-size: 14px; outline: none;
+    font-family: var(--font-body);
+    transition: border-color 0.15s;
+  }
+  .inp:focus { border-color: rgba(79,142,247,0.4); }
+  .fld { margin-bottom: 14px; }
+  .fld label { display: block; font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 5px; }
+
+  /* ── BUTTONS ── */
+  .btn-primary {
+    width: 100%; padding: 13px 0;
+    background: linear-gradient(135deg,#4F8EF7,#7B6EF7);
+    border: none; border-radius: 11px; color: #fff;
+    font-weight: 700; font-size: 15px; cursor: pointer;
+    font-family: var(--font-head); letter-spacing: 0.02em;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    padding: 10px 18px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(79,142,247,0.3);
+    border-radius: 10px; color: var(--accent);
+    font-weight: 700; font-size: 13px; cursor: pointer;
+    font-family: var(--font-body); display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s;
+  }
+  .btn-icon { background: none; border: none; cursor: pointer; }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed; bottom: 88px; right: 20px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg,#4F8EF7,#7B6EF7);
+    border: none; color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px rgba(79,142,247,0.45); z-index: 100;
+    transition: transform 0.15s;
+  }
+  .fab:active { transform: scale(0.93); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 1000; display: flex; align-items: flex-end;
+    backdrop-filter: blur(6px);
+  }
+  .modal-box {
+    width: 100%; max-height: 92vh; background: var(--card);
+    border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+    border: 1px solid var(--border); overflow: hidden;
+    animation: slideUp 0.25s cubic-bezier(0.32,0.72,0,1);
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .modal-title { font-family: var(--font-head); font-size: 16px; font-weight: 700; color: var(--text); }
+  .modal-close { background: rgba(255,255,255,0.06); border: none; color: var(--text2); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .modal-body { overflow-y: auto; flex: 1; padding: 16px 20px 36px; }
+
+  /* ── TYPE TOGGLE ── */
+  .type-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .type-btn { flex: 1; padding: 10px 0; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; font-size: 13px; font-family: var(--font-body); transition: all 0.15s; background: rgba(255,255,255,0.05); color: var(--muted); }
+  .type-btn.active-income { background: var(--green); color: #0a1020; }
+  .type-btn.active-expense { background: var(--red); color: #fff; }
+
+  /* ── TAB BAR ── */
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 16px; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 4px; }
+  .tab-btn { flex: 1; padding: 8px 0; border-radius: 9px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; text-transform: capitalize; font-family: var(--font-body); transition: all 0.15s; background: transparent; color: var(--muted); }
+  .tab-btn.active { background: rgba(79,142,247,0.7); color: #fff; }
+
+  /* ── LEDGER ITEM ── */
+  .ledger-item { display: flex; align-items: center; padding: 14px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .ledger-item:last-child { border-bottom: none; }
+  .ledger-icon { width: 36px; height: 36px; border-radius: 9px; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0; color: var(--accent); }
+
+  /* ── MASTER ITEM ── */
+  .master-item { display: flex; align-items: center; padding: 12px 14px; background: var(--card); border-radius: 12px; margin-bottom: 8px; border: 1px solid var(--border); }
+
+  /* ── SETUP ── */
+  .setup-wrap { padding: 28px 20px 60px; }
+  .setup-logo { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg,#4F8EF7,#2DD4A0); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: #fff; }
+  .setup-title { font-family: var(--font-head); font-size: 22px; font-weight: 800; color: var(--text); text-align: center; letter-spacing: -0.5px; }
+  .setup-sub { font-size: 13px; color: var(--muted); text-align: center; margin-top: 6px; margin-bottom: 24px; }
+  .code-box { background: #070D1A; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 20px; }
+  .code-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.3); }
+  .code-label { font-size: 11px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
+  .copy-btn { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--font-body); transition: all 0.15s; }
+  .copy-btn.default { background: var(--accent-dim); border: 1px solid rgba(79,142,247,0.3); color: var(--accent); }
+  .copy-btn.copied { background: var(--green-dim); border: 1px solid rgba(45,212,160,0.4); color: var(--green); }
+  .code-pre { margin: 0; padding: 12px 14px; font-size: 10px; color: #7C8FAC; font-family: var(--font-mono); overflow-x: auto; max-height: 150px; line-height: 1.6; white-space: pre-wrap; }
+  .step-item { display: flex; gap: 12px; padding: 12px 14px; background: var(--card); border-radius: 12px; margin-bottom: 8px; border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  .step-item.open { background: var(--accent-dim); border-color: rgba(79,142,247,0.35); }
+  .step-num { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--muted); transition: all 0.15s; }
+  .step-item.open .step-num { background: rgba(79,142,247,0.7); color: #fff; }
+  .step-title { font-size: 13px; font-weight: 700; color: #94a3b8; }
+  .step-item.open .step-title { color: var(--text); }
+  .step-body { font-size: 12px; color: var(--muted); line-height: 1.55; white-space: pre-line; margin-top: 4px; display: none; }
+  .step-item.open .step-body { display: block; }
+  .warn-box { background: rgba(251,191,36,0.07); border: 1px solid rgba(251,191,36,0.22); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; display: flex; gap: 10px; align-items: flex-start; }
+  .warn-text { font-size: 12px; color: #D97706; line-height: 1.55; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; justify-content: center; }
+  .badge { font-size: 11px; color: var(--muted); padding: 4px 10px; border: 1px solid var(--border); border-radius: 99px; }
+  .url-mono { font-family: var(--font-mono); font-size: 11px; }
+
+  /* ── TOAST ── */
+  .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 700; z-index: 2000; box-shadow: 0 4px 20px rgba(0,0,0,0.4); white-space: nowrap; display: none; animation: toastIn 0.2s ease; }
+  .toast.show { display: block; }
+  .toast.success { background: var(--green); color: #0a1020; }
+  .toast.error { background: var(--red); color: #fff; }
+
+  /* ── LOADING / ERROR ── */
+  .fullscreen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; }
+  .spin-logo { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg,#4F8EF7,#2DD4A0); display: flex; align-items: center; justify-content: center; color: #fff; animation: spin 2s linear infinite; }
+  .empty-state { text-align: center; padding: 48px 0; color: var(--muted); }
+  .empty-icon { opacity: 0.25; margin-bottom: 12px; }
+
+  /* ── IMPORT PREVIEW ── */
+  .import-sample { margin-top: 18px; padding: 14px; background: rgba(79,142,247,0.06); border-radius: 10px; border: 1px solid rgba(79,142,247,0.2); }
+  .import-table { width: 100%; font-size: 11px; color: var(--muted); border-collapse: collapse; }
+  .import-table th { text-align: left; padding: 3px 6px; color: #64748b; }
+  .import-table td { padding: 3px 6px; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 430px) {
+    .hero-amount { font-size: 28px; }
+    .stat-card-val { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ TOAST ═══ -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ═══ SETUP SCREEN ═══ -->
+  <div id="screen-setup" style="display:none">
+    <div class="setup-wrap">
+      <div class="setup-logo">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="2" y1="15" x2="22" y2="15"/><line x1="8" y1="3" x2="8" y2="21"/></svg>
+      </div>
+      <div class="setup-title">Connect Google Sheets</div>
+      <div class="setup-sub">Your data lives in your own Google Drive — private, free &amp; unlimited rows.</div>
+
+      <!-- Code Box -->
+      <div class="code-box">
+        <div class="code-head">
+          <span class="code-label">Apps Script — Paste this in your Sheet</span>
+          <button class="copy-btn default" id="copyBtn" onclick="copyScript()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy Script
+          </button>
+        </div>
+        <pre class="code-pre">// ═══ Finance App — Google Apps Script Backend ═══
+// Deploy: Deploy → New Deployment → Web App
+// Execute as: Me  |  Access: Anyone
+
+const SCHEMAS = {
+  Transactions:  ['id','date','type','description','amount',
+                  'categoryId','subcategoryId','ledgerId','tags'],
+  Groups:        ['id','name','type'],
+  Categories:    ['id','groupId','name'],
+  SubCategories: ['id','categoryId','name'],
+  Ledgers:       ['id','name','groupId','openingBalance']
+};
+// ... (copy full script via button above)</pre>
+      </div>
+
+      <!-- Steps -->
+      <div style="margin-bottom:20px">
+        <div class="group-label" style="margin-bottom:10px">Setup Steps</div>
+        <div id="steps-list"></div>
+      </div>
+
+      <!-- Warning -->
+      <div class="warn-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <p class="warn-text"><strong>Important:</strong> Set <strong>Execute as: Me</strong> and <strong>Who has access: Anyone</strong> when deploying. Without this the app cannot write to your sheet.</p>
+      </div>
+
+      <!-- URL -->
+      <div class="fld">
+        <label>Web App URL</label>
+        <input class="inp url-mono" id="gasUrlInput" placeholder="https://script.google.com/macros/s/AKfy…/exec" />
+      </div>
+      <div id="setup-err" style="font-size:12px;color:var(--red);margin-top:-8px;margin-bottom:12px;display:none"></div>
+      <button class="btn-primary" id="connectBtn" onclick="connectSheets()">Connect to Google Sheets</button>
+
+      <div class="badge-row">
+        <span class="badge">Stored in your Google Drive</span>
+        <span class="badge">No 3rd-party servers</span>
+        <span class="badge">Free &amp; unlimited</span>
+        <span class="badge">Accessible anywhere</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ LOADING ═══ -->
+  <div id="screen-loading" style="display:none">
+    <div class="fullscreen">
+      <div class="spin-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </div>
+      <p style="font-family:var(--font-head);font-weight:700;font-size:16px;color:var(--text)">Loading from Google Sheets…</p>
+      <p style="font-size:13px;color:var(--muted)">Fetching your financial data</p>
+    </div>
+  </div>
+
+  <!-- ═══ ERROR ═══ -->
+  <div id="screen-error" style="display:none">
+    <div class="fullscreen">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <p style="font-family:var(--font-head);font-weight:700;font-size:18px;color:var(--text)">Connection Failed</p>
+      <p style="font-size:13px;color:var(--muted);text-align:center">Could not reach your Google Apps Script URL.<br>Check deployment settings (Access: Anyone).</p>
+      <button class="btn-secondary" onclick="loadData(App.gasUrl)" style="width:auto">Retry</button>
+      <button onclick="disconnect()" style="padding:11px 24px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--muted);font-weight:700;cursor:pointer;font-family:var(--font-body)">Change URL</button>
+    </div>
+  </div>
+
+  <!-- ═══ MAIN APP ═══ -->
+  <div id="screen-app" style="display:none">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-row">
+        <div>
+          <div class="header-title" id="pageTitle">Overview</div>
+          <div class="header-sub" id="pageDate"></div>
+        </div>
+        <div class="header-actions">
+          <svg class="sync-indicator" id="syncIndicator" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <button class="icon-btn" style="background:var(--accent-dim);border:1px solid rgba(79,142,247,0.3);color:var(--accent)" onclick="loadData(App.gasUrl)" title="Refresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <button class="logo-btn" onclick="disconnect()" title="Disconnect">₹</button>
+        </div>
+      </div>
+      <div class="header-badge">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="2" y1="15" x2="22" y2="15"/><line x1="8" y1="3" x2="8" y2="21"/></svg>
+        <span id="sheetsStatus">Google Sheets connected</span>
+      </div>
+    </div>
+
+    <!-- PAGES -->
+    <div id="page-dashboard" class="page active"></div>
+    <div id="page-transactions" class="page"></div>
+    <div id="page-ledgers" class="page"></div>
+    <div id="page-settings" class="page"></div>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" data-tab="transactions" onclick="switchTab('transactions')">
+        <div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <span class="nav-label">Entries</span>
+      </button>
+      <button class="nav-item" data-tab="ledgers" onclick="switchTab('ledgers')">
+        <div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></div>
+        <span class="nav-label">Ledgers</span>
+      </button>
+      <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+        <div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        <span class="nav-label">Master</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ═══ MODAL ═══ -->
+  <div class="modal-overlay" id="modal" style="display:none" onclick="closeModalOnBg(event)">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div class="modal-title" id="modalTitle"></div>
+        <button class="modal-close" onclick="closeModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImport(event)"/>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   APPS SCRIPT BACKEND CODE (full)
+═══════════════════════════════════════════════════════════════ */
+const GAS_CODE = `// ═══ Finance App — Google Apps Script Backend ═══
+// 1. In Google Sheets: Extensions → Apps Script
+// 2. Paste this entire code, save (Ctrl+S)
+// 3. Deploy → New Deployment → Web App
+//    Execute as: Me  |  Access: Anyone
+// 4. Copy the Web App URL and paste in the app
+
+const SCHEMAS = {
+  Transactions:  ['id','date','type','description','amount','categoryId','subcategoryId','ledgerId','tags'],
+  Groups:        ['id','name','type'],
+  Categories:    ['id','groupId','name'],
+  SubCategories: ['id','categoryId','name'],
+  Ledgers:       ['id','name','groupId','openingBalance']
+};
+
+function doGet(e)  { return respond(route(e.parameter, null)); }
+function doPost(e) { return respond(route(null, JSON.parse(e.postData.contents))); }
+
+function respond(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function route(p, b) {
+  try {
+    const a = (p && p.action) || (b && b.action);
+    if (a === 'getAll') return getAll();
+    if (a === 'init')   return initSheets();
+    if (a === 'add')    return addRow(b.sheet, b.row);
+    if (a === 'update') return updateRow(b.sheet, b.id, b.row);
+    if (a === 'delete') return deleteRow(b.sheet, b.id);
+    return { error: 'Unknown action: ' + a };
+  } catch(e) { return { error: e.toString() }; }
+}
+
+function getAll() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const out = {};
+  Object.keys(SCHEMAS).forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) { out[name] = []; return; }
+    const rows = sh.getDataRange().getValues();
+    const hdrs = rows[0];
+    out[name] = rows.slice(1)
+      .filter(r => r[0])
+      .map(r => Object.fromEntries(hdrs.map((h,i) => [h, r[i] ?? ''])));
+  });
+  return out;
+}
+
+function initSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  Object.entries(SCHEMAS).forEach(([name, hdrs]) => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    if (sh.getLastRow() === 0) sh.appendRow(hdrs);
+  });
+  return { success: true };
+}
+
+function addRow(sheetName, row) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return { error: 'Sheet not found: ' + sheetName };
+  const hdrs = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  sh.appendRow(hdrs.map(h => row[h] !== undefined ? row[h] : ''));
+  return { success: true };
+}
+
+function updateRow(sheetName, id, row) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return { error: 'Sheet not found' };
+  const data = sh.getDataRange().getValues();
+  const hdrs = data[0];
+  const idx  = data.findIndex((r,i) => i > 0 && String(r[0]) === String(id));
+  if (idx < 0) return { error: 'Row not found' };
+  sh.getRange(idx+1,1,1,hdrs.length).setValues([hdrs.map(h => row[h] !== undefined ? row[h] : '')]);
+  return { success: true };
+}
+
+function deleteRow(sheetName, id) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return { error: 'Sheet not found' };
+  const data = sh.getDataRange().getValues();
+  const idx  = data.findIndex((r,i) => i > 0 && String(r[0]) === String(id));
+  if (idx < 0) return { error: 'Row not found' };
+  sh.deleteRow(idx + 1);
+  return { success: true };
+}`;
+
+/* ═══════════════════════════════════════════════════════════════
+   APP STATE
+═══════════════════════════════════════════════════════════════ */
+const App = {
+  gasUrl: localStorage.getItem('gasUrl') || '',
+  state: 'setup',
+  tab: 'dashboard',
+  syncing: false,
+  txFilter: 'all',
+  txSearch: '',
+  masterTab: 'groups',
+  editingTx: null,
+  editingLedger: null,
+  data: {
+    transactions: [],
+    groups: [],
+    categories: [],
+    subcategories: [],
+    ledgers: []
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+const fmt = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n);
+const uid = () => Math.random().toString(36).slice(2,10);
+const toArr = v => typeof v==='string' ? v.split(',').map(s=>s.trim()).filter(Boolean) : (v||[]);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const svgUp = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>`;
+const svgDown = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+function setSyncing(v) {
+  App.syncing = v;
+  document.getElementById('syncIndicator').classList.toggle('active', v);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════════════════════ */
+async function sheetsAPI(url, data) {
+  const endpoint = data ? url : `${url}?action=getAll`;
+  const opts = data
+    ? { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(data), redirect:'follow' }
+    : { redirect:'follow' };
+  const res = await fetch(endpoint, opts);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+async function api(action, opts) {
+  setSyncing(true);
+  try { await sheetsAPI(App.gasUrl, { action, ...opts }); }
+  catch(e) { showToast('Sync error: ' + e.message, 'error'); }
+  setSyncing(false);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROUTING / SCREEN CONTROL
+═══════════════════════════════════════════════════════════════ */
+function showScreen(name) {
+  ['setup','loading','error','app'].forEach(s => {
+    document.getElementById('screen-'+s).style.display = s===name ? 'block' : 'none';
+  });
+}
+
+function switchTab(tab) {
+  App.tab = tab;
+  const titles = {dashboard:'Overview',transactions:'Transactions',ledgers:'Ledgers',settings:'Master Data'};
+  document.getElementById('pageTitle').textContent = titles[tab];
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  renderPage(tab);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DATA LOAD
+═══════════════════════════════════════════════════════════════ */
+async function loadData(url) {
+  showScreen('loading');
+  try {
+    const d = await sheetsAPI(url);
+    App.data.transactions  = d.Transactions  || [];
+    App.data.groups        = d.Groups        || [];
+    App.data.categories    = d.Categories    || [];
+    App.data.subcategories = d.SubCategories || [];
+    App.data.ledgers       = d.Ledgers       || [];
+    App.gasUrl = url;
+    showScreen('app');
+    document.getElementById('pageDate').textContent = new Date().toDateString();
+    document.getElementById('sheetsStatus').textContent =
+      `Google Sheets · ${App.data.transactions.length} entries`;
+    renderPage(App.tab);
+  } catch(e) { showScreen('error'); }
+}
+
+async function connectSheets() {
+  const url = document.getElementById('gasUrlInput').value.trim();
+  const err = document.getElementById('setup-err');
+  const btn = document.getElementById('connectBtn');
+  if (!url) return;
+  err.style.display = 'none';
+  btn.textContent = 'Connecting…';
+  btn.disabled = true;
+  try {
+    const r = await sheetsAPI(url, { action:'init' });
+    if (r.success) {
+      localStorage.setItem('gasUrl', url);
+      await loadData(url);
+    } else {
+      err.textContent = r.error || 'Init failed. Check your script and permissions.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = "Cannot reach URL. Ensure Access is set to 'Anyone' in deployment.";
+    err.style.display = 'block';
+  }
+  btn.textContent = 'Connect to Google Sheets';
+  btn.disabled = false;
+}
+
+function disconnect() {
+  localStorage.removeItem('gasUrl');
+  App.gasUrl = '';
+  App.data = { transactions:[], groups:[], categories:[], subcategories:[], ledgers:[] };
+  showScreen('setup');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════════════════ */
+function openModal(title, html) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function closeModalOnBg(e) { if (e.target === document.getElementById('modal')) closeModal(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER DISPATCHER
+═══════════════════════════════════════════════════════════════ */
+function renderPage(tab) {
+  if (tab === 'dashboard')    renderDashboard();
+  if (tab === 'transactions') renderTransactions();
+  if (tab === 'ledgers')      renderLedgers();
+  if (tab === 'settings')     renderSettings();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MONTHLY DATA
+═══════════════════════════════════════════════════════════════ */
+function getMonthly(txs) {
+  const map = {};
+  txs.forEach(t => {
+    const k = t.date.slice(0,7);
+    if (!map[k]) map[k] = {income:0,expense:0};
+    if (t.type==='income') map[k].income += +t.amount;
+    else map[k].expense += +t.amount;
+  });
+  return Object.entries(map).sort().map(([m,v]) => ({month:m,...v,profit:v.income-v.expense}));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+function renderDashboard() {
+  const { transactions, categories } = App.data;
+  const totalInc = transactions.filter(t=>t.type==='income').reduce((a,t)=>a+(+t.amount),0);
+  const totalExp = transactions.filter(t=>t.type==='expense').reduce((a,t)=>a+(+t.amount),0);
+  const net = totalInc - totalExp;
+  const mo = new Date().toISOString().slice(0,7);
+  const mTx = transactions.filter(t=>t.date.slice(0,7)===mo);
+  const mInc = mTx.filter(t=>t.type==='income').reduce((a,t)=>a+(+t.amount),0);
+  const mExp = mTx.filter(t=>t.type==='expense').reduce((a,t)=>a+(+t.amount),0);
+  const mData = getMonthly(transactions);
+  const catBrk = categories.map(c=>({...c,total:mTx.filter(t=>t.categoryId===c.id).reduce((a,t)=>a+(+t.amount),0)})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total).slice(0,5);
+  const maxC = Math.max(...catBrk.map(c=>c.total),1);
+
+  // Bar chart HTML
+  let chartHtml = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:16px 0">Add transactions to see chart</p>';
+  if (mData.length) {
+    const max = Math.max(...mData.map(d=>Math.max(d.income,d.expense)),1);
+    chartHtml = '<div class="chart-wrap">' + mData.slice(-6).map(d => `
+      <div class="chart-col">
+        <div class="chart-bars">
+          <div class="bar" style="background:var(--green);height:${(d.income/max)*56}px"></div>
+          <div class="bar" style="background:var(--red);height:${(d.expense/max)*56}px"></div>
+        </div>
+        <span class="chart-label">${d.month.slice(5)}</span>
+      </div>`).join('') + '</div>';
+  }
+
+  // P&L table
+  let tableHtml = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:12px 0">No data yet</p>';
+  if (mData.length) {
+    tableHtml = `<table class="data-table">
+      <thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expense</th><th class="r">P&L</th></tr></thead>
+      <tbody>${mData.slice(-6).reverse().map(r=>`
+        <tr>
+          <td style="color:#94a3b8">${r.month}</td>
+          <td class="r" style="color:var(--green)">${fmt(r.income)}</td>
+          <td class="r" style="color:var(--red)">${fmt(r.expense)}</td>
+          <td class="r" style="color:${r.profit>=0?'var(--green)':'var(--red)'};font-weight:700">${r.profit>=0?'+':''}${fmt(r.profit)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  // Category bars
+  let catHtml = '';
+  catBrk.forEach(c => {
+    catHtml += `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:13px;color:#CBD5E1">${esc(c.name)}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--text);font-family:var(--font-mono)">${fmt(c.total)}</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${(c.total/maxC)*100}%"></div></div>
+    </div>`;
+  });
+
+  document.getElementById('page-dashboard').innerHTML = `
+    <!-- Hero -->
+    <div class="hero-card">
+      <div class="hero-label">Net P&L — All Time</div>
+      <div class="hero-amount" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${fmt(net)}</div>
+      <div class="hero-row">
+        <div>
+          <div class="hero-stat-label" style="color:var(--green)">Total Income</div>
+          <div class="hero-stat-val">${fmt(totalInc)}</div>
+        </div>
+        <div>
+          <div class="hero-stat-label" style="color:var(--red)">Total Expense</div>
+          <div class="hero-stat-val">${fmt(totalExp)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Month cards -->
+    <div class="grid2">
+      <div class="stat-card" style="background:var(--green-dim);border-color:rgba(45,212,160,0.2)">
+        <div style="color:var(--green)">${svgUp}</div>
+        <div class="stat-card-label">Income · Month</div>
+        <div class="stat-card-val" style="color:var(--green)">${fmt(mInc)}</div>
+      </div>
+      <div class="stat-card" style="background:var(--red-dim);border-color:rgba(244,113,106,0.2)">
+        <div style="color:var(--red)">${svgDown}</div>
+        <div class="stat-card-label">Expense · Month</div>
+        <div class="stat-card-val" style="color:var(--red)">${fmt(mExp)}</div>
+      </div>
+    </div>
+
+    <!-- Bar chart -->
+    <div class="card card-p" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="section-title">Monthly Overview</div>
+        <div style="display:flex;gap:10px;font-size:10px;color:var(--muted)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Income</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--red);display:inline-block"></span>Expense</span>
+        </div>
+      </div>
+      ${chartHtml}
+    </div>
+
+    ${catBrk.length ? `<div class="card card-p" style="margin-bottom:14px"><div class="section-title">Top Categories — This Month</div>${catHtml}</div>` : ''}
+
+    <!-- P&L Table -->
+    <div class="card card-p">
+      <div class="section-title">Month-wise P&L</div>
+      ${tableHtml}
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TRANSACTIONS
+═══════════════════════════════════════════════════════════════ */
+function renderTransactions() {
+  const { transactions, categories } = App.data;
+  const filtered = transactions
+    .filter(t => (App.txFilter==='all'||t.type===App.txFilter) && t.description.toLowerCase().includes(App.txSearch.toLowerCase()))
+    .sort((a,b) => b.date.localeCompare(a.date));
+
+  // Group by date
+  const groups = {};
+  filtered.forEach(t => { if(!groups[t.date]) groups[t.date]=[]; groups[t.date].push(t); });
+
+  let listHtml = '';
+  Object.entries(groups).forEach(([date, txs]) => {
+    listHtml += `<div class="tx-group-label">${date}</div><div class="tx-list">`;
+    txs.forEach(t => {
+      const cat = categories.find(c=>c.id===t.categoryId);
+      const tags = toArr(t.tags);
+      const isInc = t.type==='income';
+      listHtml += `<div class="tx-item">
+        <div class="tx-icon" style="background:${isInc?'var(--green-dim)':'var(--red-dim)'};color:${isInc?'var(--green)':'var(--red)'}">
+          ${isInc?svgUp:svgDown}
+        </div>
+        <div class="tx-info">
+          <div class="tx-name">${esc(t.description)}</div>
+          <div class="tx-meta">${cat?esc(cat.name):'—'}${tags.length?' · '+tags.slice(0,2).join(', '):''}</div>
+        </div>
+        <div>
+          <div class="tx-amount" style="color:${isInc?'var(--green)':'var(--red)'}">${isInc?'+':'-'}${fmt(+t.amount)}</div>
+          <div class="tx-actions">
+            <button onclick="openTxForm('${esc(t.id)}')" title="Edit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button onclick="deleteTx('${esc(t.id)}')" title="Delete">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    });
+    listHtml += '</div>';
+  });
+
+  if (!filtered.length) {
+    listHtml = `<div class="empty-state"><div class="empty-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><p>No transactions found</p></div>`;
+  }
+
+  document.getElementById('page-transactions').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div class="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="inp" placeholder="Search transactions…" value="${esc(App.txSearch)}" oninput="App.txSearch=this.value;renderTransactions()" style="padding-left:38px"/>
+      </div>
+      <button class="btn-secondary" onclick="document.getElementById('importFile').click()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Import
+      </button>
+    </div>
+    <div class="filter-row">
+      <button class="filter-pill ${App.txFilter==='all'?'active-all':''}" onclick="App.txFilter='all';renderTransactions()">All</button>
+      <button class="filter-pill ${App.txFilter==='income'?'active-income':''}" onclick="App.txFilter='income';renderTransactions()">Income</button>
+      <button class="filter-pill ${App.txFilter==='expense'?'active-expense':''}" onclick="App.txFilter='expense';renderTransactions()">Expense</button>
+    </div>
+    ${listHtml}
+    <button class="fab" onclick="openTxForm(null)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TX FORM
+═══════════════════════════════════════════════════════════════ */
+function openTxForm(id) {
+  const tx = id ? App.data.transactions.find(t=>t.id===id) : null;
+  const { categories, subcategories, ledgers } = App.data;
+  const f = tx || { date:new Date().toISOString().slice(0,10), type:'income', description:'', amount:'', categoryId:'', subcategoryId:'', ledgerId:'', tags:'' };
+
+  const catOpts = categories.map(c=>`<option value="${esc(c.id)}" ${f.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  const subOpts = subcategories.filter(s=>s.categoryId===f.categoryId).map(s=>`<option value="${esc(s.id)}" ${f.subcategoryId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+  const ledOpts = ledgers.map(l=>`<option value="${esc(l.id)}" ${f.ledgerId===l.id?'selected':''}>${esc(l.name)}</option>`).join('');
+  const tagsVal = Array.isArray(f.tags)?f.tags.join(', '):f.tags;
+
+  openModal(tx ? 'Edit Transaction' : 'New Transaction', `
+    <div class="type-toggle">
+      <button class="type-btn ${f.type==='income'?'active-income':''}" onclick="toggleType(this,'income')">↑ Income</button>
+      <button class="type-btn ${f.type==='expense'?'active-expense':''}" onclick="toggleType(this,'expense')">↓ Expense</button>
+    </div>
+    <input type="hidden" id="f-id" value="${esc(f.id||'')}"/>
+    <input type="hidden" id="f-type" value="${esc(f.type)}"/>
+    <div class="fld"><label>Date</label><input class="inp" type="date" id="f-date" value="${esc(f.date)}"/></div>
+    <div class="fld"><label>Description</label><input class="inp" id="f-desc" placeholder="What was this for?" value="${esc(f.description)}"/></div>
+    <div class="fld"><label>Amount (₹)</label><input class="inp" type="number" id="f-amount" placeholder="0" value="${esc(f.amount||'')}"/></div>
+    <div class="fld"><label>Category</label>
+      <select class="inp" id="f-cat" onchange="updateSubcats()" style="appearance:none">
+        <option value="">Select category</option>${catOpts}
+      </select>
+    </div>
+    <div class="fld" id="subcat-fld" style="${subOpts?'':'display:none'}"><label>Sub-category</label>
+      <select class="inp" id="f-sub" style="appearance:none">
+        <option value="">Select sub-category</option>${subOpts}
+      </select>
+    </div>
+    <div class="fld"><label>Ledger</label>
+      <select class="inp" id="f-ledger" style="appearance:none">
+        <option value="">Select ledger</option>${ledOpts}
+      </select>
+    </div>
+    <div class="fld"><label>Tags (comma-separated)</label><input class="inp" id="f-tags" placeholder="sales, fixed, recurring…" value="${esc(tagsVal)}"/></div>
+    <button class="btn-primary" onclick="saveTx()" style="margin-top:8px">${tx?'Update Entry':'Add Entry'}</button>
+  `);
+}
+
+function toggleType(btn, type) {
+  document.querySelectorAll('.type-btn').forEach(b => { b.className = 'type-btn'; });
+  btn.className = `type-btn active-${type}`;
+  document.getElementById('f-type').value = type;
+}
+
+function updateSubcats() {
+  const catId = document.getElementById('f-cat').value;
+  const subs = App.data.subcategories.filter(s=>s.categoryId===catId);
+  const fld = document.getElementById('subcat-fld');
+  const sel = document.getElementById('f-sub');
+  if (subs.length) {
+    fld.style.display = '';
+    sel.innerHTML = '<option value="">Select sub-category</option>' + subs.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  } else { fld.style.display = 'none'; }
+}
+
+async function saveTx() {
+  const id   = document.getElementById('f-id').value;
+  const type = document.getElementById('f-type').value;
+  const date = document.getElementById('f-date').value;
+  const desc = document.getElementById('f-desc').value.trim();
+  const amt  = parseFloat(document.getElementById('f-amount').value);
+  const cat  = document.getElementById('f-cat').value;
+  const sub  = document.getElementById('f-sub') ? document.getElementById('f-sub').value : '';
+  const led  = document.getElementById('f-ledger').value;
+  const tags = document.getElementById('f-tags').value;
+
+  if (!desc || !amt || !date) { showToast('Fill in required fields', 'error'); return; }
+
+  const t = { id:id||uid(), date, type, description:desc, amount:amt, categoryId:cat, subcategoryId:sub, ledgerId:led, tags };
+  const btn = document.querySelector('#modalBody .btn-primary');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  if (id) {
+    App.data.transactions = App.data.transactions.map(x => x.id===id?t:x);
+    await api('update', { sheet:'Transactions', id, row:{...t,tags:t.tags} });
+    showToast('Updated in Google Sheets ✓');
+  } else {
+    App.data.transactions = [t, ...App.data.transactions];
+    await api('add', { sheet:'Transactions', row:{...t,tags:t.tags} });
+    showToast('Saved to Google Sheets ✓');
+  }
+  closeModal();
+  renderTransactions();
+  document.getElementById('sheetsStatus').textContent = `Google Sheets · ${App.data.transactions.length} entries`;
+}
+
+async function deleteTx(id) {
+  if (!confirm('Delete this entry?')) return;
+  App.data.transactions = App.data.transactions.filter(t=>t.id!==id);
+  await api('delete', { sheet:'Transactions', id });
+  showToast('Deleted ✓');
+  renderTransactions();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   IMPORT
+═══════════════════════════════════════════════════════════════ */
+async function handleImport(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+      let count = 0;
+      for (const r of rows) {
+        const t = {
+          id:uid(),
+          date:String(r.Date||r.date||new Date().toISOString().slice(0,10)).slice(0,10),
+          type:(r.Type||r.type||'expense').toLowerCase(),
+          description:String(r.Description||r.description||r.Narration||'Imported'),
+          amount:parseFloat(r.Amount||r.amount||0),
+          categoryId:'', subcategoryId:'', ledgerId:'', tags:'imported'
+        };
+        App.data.transactions.push(t);
+        await api('add', { sheet:'Transactions', row:t });
+        count++;
+      }
+      showToast(`Imported ${count} entries ✓`);
+      renderTransactions();
+    } catch(err) { showToast('Parse error. Expected: Date, Type, Description, Amount', 'error'); }
+    e.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LEDGERS
+═══════════════════════════════════════════════════════════════ */
+function renderLedgers() {
+  const { ledgers, groups, transactions } = App.data;
+  let html = '';
+  groups.forEach(g => {
+    const gl = ledgers.filter(l=>l.groupId===g.id);
+    if (!gl.length) return;
+    html += `<div class="group-label">${esc(g.name)}</div><div class="tx-list" style="margin-bottom:20px">`;
+    gl.forEach(l => {
+      const lTx = transactions.filter(t=>t.ledgerId===l.id);
+      const bal = (+l.openingBalance) + lTx.filter(t=>t.type==='income').reduce((a,t)=>a+(+t.amount),0) - lTx.filter(t=>t.type==='expense').reduce((a,t)=>a+(+t.amount),0);
+      html += `<div class="ledger-item">
+        <div class="ledger-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></div>
+        <div style="flex:1">
+          <div style="font-size:14px;color:var(--text);font-weight:600">${esc(l.name)}</div>
+          <div style="font-size:11px;color:var(--muted)">${lTx.length} entries · Opening: ${fmt(+l.openingBalance)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:600;color:${bal>=0?'var(--green)':'var(--red)'};margin-bottom:4px">${fmt(bal)}</div>
+          <button onclick="deleteLedger('${esc(l.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  if (!ledgers.length) html = '<div class="empty-state"><p>No ledgers yet. Tap + to add one.</p></div>';
+
+  document.getElementById('page-ledgers').innerHTML = `
+    ${html}
+    <button class="fab" onclick="openLedgerForm()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  `;
+}
+
+function openLedgerForm() {
+  const gOpts = App.data.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
+  openModal('New Ledger', `
+    <div class="fld"><label>Ledger Name</label><input class="inp" id="l-name" placeholder="e.g. Cash in Hand"/></div>
+    <div class="fld"><label>Group</label><select class="inp" id="l-group" style="appearance:none"><option value="">Select group</option>${gOpts}</select></div>
+    <div class="fld"><label>Opening Balance (₹)</label><input class="inp" type="number" id="l-bal" placeholder="0"/></div>
+    <button class="btn-primary" onclick="saveLedger()" style="margin-top:8px">Create Ledger</button>
+  `);
+}
+
+async function saveLedger() {
+  const name = document.getElementById('l-name').value.trim();
+  const groupId = document.getElementById('l-group').value;
+  const openingBalance = parseFloat(document.getElementById('l-bal').value)||0;
+  if (!name||!groupId) { showToast('Fill in all fields','error'); return; }
+  const l = {id:uid(),name,groupId,openingBalance};
+  const btn = document.querySelector('#modalBody .btn-primary');
+  btn.textContent='Saving…';btn.disabled=true;
+  App.data.ledgers.push(l);
+  await api('add',{sheet:'Ledgers',row:l});
+  showToast('Ledger saved ✓');
+  closeModal(); renderLedgers();
+}
+
+async function deleteLedger(id) {
+  if (!confirm('Delete this ledger?')) return;
+  App.data.ledgers = App.data.ledgers.filter(l=>l.id!==id);
+  await api('delete',{sheet:'Ledgers',id});
+  renderLedgers();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MASTER DATA (Settings)
+═══════════════════════════════════════════════════════════════ */
+function renderSettings() {
+  const { groups, categories, subcategories } = App.data;
+  const tab = App.masterTab;
+
+  let contentHtml = '';
+  if (tab === 'groups') {
+    if (!groups.length) contentHtml = '<div class="empty-state"><p>No groups yet.</p></div>';
+    groups.forEach(g => {
+      contentHtml += `<div class="master-item">
+        <div style="width:10px;height:10px;border-radius:50%;background:${g.type==='income'?'var(--green)':'var(--red)'};margin-right:12px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-size:14px;color:var(--text);font-weight:600">${esc(g.name)}</div>
+          <div style="font-size:11px;color:var(--muted);text-transform:capitalize">${esc(g.type)}</div>
+        </div>
+        <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:${g.type==='income'?'var(--green-dim)':'var(--red-dim)'};color:${g.type==='income'?'var(--green)':'var(--red)'};font-weight:700;text-transform:uppercase;margin-right:8px">${esc(g.type)}</span>
+        <button onclick="deleteMaster('Groups','${esc(g.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>`;
+    });
+  }
+  if (tab === 'categories') {
+    groups.forEach(g => {
+      const cats = categories.filter(c=>c.groupId===g.id);
+      if (!cats.length) return;
+      contentHtml += `<div class="group-label">${esc(g.name)}</div>`;
+      cats.forEach(c => {
+        contentHtml += `<div class="master-item" style="margin-left:0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" style="margin-right:10px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          <span style="flex:1;font-size:14px;color:#CBD5E1">${esc(c.name)}</span>
+          <span style="font-size:11px;color:var(--muted);margin-right:8px">${subcategories.filter(s=>s.categoryId===c.id).length} sub</span>
+          <button onclick="deleteMaster('Categories','${esc(c.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>`;
+      });
+    });
+    if (!categories.length) contentHtml = '<div class="empty-state"><p>No categories yet.</p></div>';
+  }
+  if (tab === 'subcategories') {
+    categories.forEach(c => {
+      const subs = subcategories.filter(s=>s.categoryId===c.id);
+      if (!subs.length) return;
+      contentHtml += `<div style="margin-bottom:16px"><div class="group-label" style="color:#94a3b8">${esc(c.name)}</div>`;
+      subs.forEach(s => {
+        contentHtml += `<div class="master-item" style="padding-left:24px">
+          <span style="color:var(--muted);margin-right:8px;font-size:12px">└</span>
+          <span style="flex:1;font-size:13px;color:#94a3b8">${esc(s.name)}</span>
+          <button onclick="deleteMaster('SubCategories','${esc(s.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>`;
+      });
+      contentHtml += '</div>';
+    });
+    if (!subcategories.length) contentHtml = '<div class="empty-state"><p>No sub-categories yet.</p></div>';
+  }
+
+  document.getElementById('page-settings').innerHTML = `
+    <div class="tab-bar">
+      <button class="tab-btn ${tab==='groups'?'active':''}" onclick="App.masterTab='groups';renderSettings()">Groups</button>
+      <button class="tab-btn ${tab==='categories'?'active':''}" onclick="App.masterTab='categories';renderSettings()">Categories</button>
+      <button class="tab-btn ${tab==='subcategories'?'active':''}" onclick="App.masterTab='subcategories';renderSettings()">Sub-cats</button>
+    </div>
+    ${contentHtml}
+    <button class="fab" onclick="openMasterForm()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  `;
+}
+
+function openMasterForm() {
+  const tab = App.masterTab;
+  const singular = tab.slice(0,-1).replace('categorie','category');
+  const gOpts = App.data.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
+  const cOpts = App.data.categories.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  openModal(`New ${singular.charAt(0).toUpperCase()+singular.slice(1)}`, `
+    <div class="fld"><label>Name</label><input class="inp" id="m-name" placeholder="Enter name…"/></div>
+    ${tab==='groups'?`<div class="fld"><label>Type</label><select class="inp" id="m-type" style="appearance:none"><option value="">Select type</option><option value="income">Income</option><option value="expense">Expense</option></select></div>`:''}
+    ${tab==='categories'?`<div class="fld"><label>Group</label><select class="inp" id="m-group" style="appearance:none"><option value="">Select group</option>${gOpts}</select></div>`:''}
+    ${tab==='subcategories'?`<div class="fld"><label>Category</label><select class="inp" id="m-cat" style="appearance:none"><option value="">Select category</option>${cOpts}</select></div>`:''}
+    <button class="btn-primary" onclick="saveMaster()" style="margin-top:8px">Create</button>
+  `);
+}
+
+async function saveMaster() {
+  const tab = App.masterTab;
+  const name = document.getElementById('m-name').value.trim();
+  if (!name) { showToast('Enter a name','error'); return; }
+  const btn = document.querySelector('#modalBody .btn-primary');
+  btn.textContent='Saving…';btn.disabled=true;
+
+  if (tab === 'groups') {
+    const type = document.getElementById('m-type').value;
+    if (!type) { showToast('Select a type','error'); btn.textContent='Create';btn.disabled=false; return; }
+    const g = {id:uid(),name,type};
+    App.data.groups.push(g);
+    await api('add',{sheet:'Groups',row:g});
+    showToast('Group saved ✓');
+  } else if (tab === 'categories') {
+    const groupId = document.getElementById('m-group').value;
+    if (!groupId) { showToast('Select a group','error'); btn.textContent='Create';btn.disabled=false; return; }
+    const c = {id:uid(),name,groupId};
+    App.data.categories.push(c);
+    await api('add',{sheet:'Categories',row:c});
+    showToast('Category saved ✓');
+  } else {
+    const categoryId = document.getElementById('m-cat').value;
+    if (!categoryId) { showToast('Select a category','error'); btn.textContent='Create';btn.disabled=false; return; }
+    const s = {id:uid(),name,categoryId};
+    App.data.subcategories.push(s);
+    await api('add',{sheet:'SubCategories',row:s});
+    showToast('Sub-category saved ✓');
+  }
+  closeModal(); renderSettings();
+}
+
+async function deleteMaster(sheet, id) {
+  if (!confirm('Delete this item?')) return;
+  if (sheet==='Groups') App.data.groups = App.data.groups.filter(x=>x.id!==id);
+  if (sheet==='Categories') App.data.categories = App.data.categories.filter(x=>x.id!==id);
+  if (sheet==='SubCategories') App.data.subcategories = App.data.subcategories.filter(x=>x.id!==id);
+  await api('delete',{sheet,id});
+  renderSettings();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETUP SCREEN — STEPS
+═══════════════════════════════════════════════════════════════ */
+const STEPS = [
+  { title:'Create a Google Sheet', body:'Go to sheets.google.com → click Blank spreadsheet.\nName it anything (e.g. "My Finance DB").' },
+  { title:'Open Apps Script Editor', body:'In the Google Sheet:\nExtensions → Apps Script\nA code editor tab will open.' },
+  { title:'Paste the Script', body:'Select all code (Ctrl+A), delete it, then click "Copy Script" above and paste it.\nSave with Ctrl+S.' },
+  { title:'Deploy as Web App', body:'Click Deploy → New Deployment → select type: Web App.\nSet:\n  Execute as: Me\n  Who has access: Anyone\nClick Deploy → copy the Web App URL.' },
+  { title:'Paste URL & Connect', body:'Paste the Web App URL in the field below.\nClick "Connect to Google Sheets".' },
+];
+
+function initSetupSteps() {
+  let stepOpen = 0;
+  const list = document.getElementById('steps-list');
+  function render() {
+    list.innerHTML = STEPS.map((s,i) => `
+      <div class="step-item ${stepOpen===i?'open':''}" onclick="setStep(${i})">
+        <div class="step-num">${i+1}</div>
+        <div>
+          <div class="step-title">${s.title}</div>
+          <div class="step-body">${s.body}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  window.setStep = i => { stepOpen = stepOpen===i?-1:i; render(); };
+  render();
+}
+
+function copyScript() {
+  navigator.clipboard.writeText(GAS_CODE).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.className = 'copy-btn copied';
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+    setTimeout(() => {
+      btn.className = 'copy-btn default';
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Script`;
+    }, 2500);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  initSetupSteps();
+  document.getElementById('pageDate').textContent = new Date().toDateString();
+  if (App.gasUrl) {
+    loadData(App.gasUrl);
+  } else {
+    showScreen('setup');
+  }
+});
+</script>
+</body>
+</html>
